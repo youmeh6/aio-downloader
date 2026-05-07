@@ -7,18 +7,9 @@ on:
         description: 'Full URL of the website to capture'
         required: true
         type: string
-      output_type:
-        description: 'Output format(s)'
-        required: true
-        type: choice
-        default: 'both'
-        options:
-          - pdf
-          - md
-          - both
 
 permissions:
-  contents: write
+  contents: write   # needed to push the PDF back
 
 jobs:
   capture:
@@ -34,20 +25,19 @@ jobs:
         with:
           node-version: '20'
 
-      # Always install both pdf-lib and turndown (lightweight)
       - name: Install Node dependencies
         run: |
           npm init -y > /dev/null
-          npm install playwright pdf-lib turndown
+          npm install playwright pdf-lib
 
+      # Installs Chromium and required OS libraries
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Capture, merge and generate files
-        env:
-          OUTPUT_TYPE: ${{ github.event.inputs.output_type }}
-        run: node .github/script/website-capture.js "${{ github.event.inputs.url }}"
+      - name: Capture, merge and name PDF
+        run: node .github/scripts/website-capture.js "${{ github.event.inputs.url }}"
 
+      # ── Upload to website folder (robust push with retries) ──
       - name: Upload to website folder
         env:
           BRANCH: ${{ github.ref_name }}
@@ -57,15 +47,7 @@ jobs:
           git config http.postBuffer 524288000
 
           mkdir -p website
-
-          # Move files that exist (PDF and/or MD)
-          if [ -f output.pdf ]; then
-            mv output.pdf website/${FILENAME}.pdf
-          fi
-          if [ -f output.md ]; then
-            mv output.md website/${FILENAME}.md
-          fi
-          # The media folder (if created) is already inside website/content
+          mv output.pdf website/${FILENAME}
 
           FILES=(website/*)
           if [ ${#FILES[@]} -eq 0 ]; then
